@@ -742,24 +742,30 @@ public class GitSCM extends SCM implements Serializable {
                         fetchFrom(git, listener, remoteRepository);
                     }
 
-                    listener.getLogger().println("Polling for changes");
+                    listener.getLogger().println("Polling for changes in " + singleBranch);
 
                     Collection<Revision> origCandidates = buildChooser.getCandidateRevisions(
                             true, singleBranch, git, listener, buildData, context);
 
                     for (Revision r : origCandidates) {
-                        final List<ObjectId> commits;
-                        if (buildData.lastBuild != null) {
-                            commits = git.revList(buildData.lastBuild.getRevision().getSha1String() + ".." + r.getSha1String());
-                        } else {
-                            commits = git.revList(r.getSha1String());
-                        }
-                        for (ObjectId commit : commits) {
-                            Revision c = new Revision(commit);
-                            if (!isRevExcluded(git, c, listener)) {
-                                // we only need one included rev to build, so avoid
-                                // unnecessary work and return now.
-                                return true;
+                        for (Branch b: r.getBranches()) {
+                            listener.getLogger().println("examining branch " + b.getName());
+                            final List<ObjectId> commits;
+                            Build lastBranchBuild = buildData.getLastBuildOfBranch(b.getName());
+                            if (lastBranchBuild != null) {
+                                listener.getLogger().println("last built: " + lastBranchBuild.getRevision().getSha1String());
+                                commits = git.revList(lastBranchBuild.getRevision().getSha1String() + ".." + r.getSha1String());
+                            } else {
+                                listener.getLogger().println("new branch");
+                                commits = git.revList(r.getSha1String());
+                            }
+                            for (ObjectId commit : commits) {
+                                Revision c = new Revision(commit);
+                                if (!isRevExcluded(git, c, listener)) {
+                                    // we only need one included rev to build, so avoid
+                                    // unnecessary work and return now.
+                                    return true;
+                                }
                             }
                         }
                     }
